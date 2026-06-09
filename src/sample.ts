@@ -1,4 +1,8 @@
 export const SAMPLE_CODE = `// Paste your own code, or explore this sample.
+// Each construct below maps to a different 3D geometry.
+import { readFile } from "fs/promises";
+import { EventEmitter } from "events";
+
 interface Particle {
   x: number;
   y: number;
@@ -6,10 +10,13 @@ interface Particle {
   vy: number;
 }
 
-class ParticleField {
+const GRAVITY = 0.002;
+
+class ParticleField extends EventEmitter {
   private particles: Particle[] = [];
 
   constructor(count: number) {
+    super();
     for (let i = 0; i < count; i++) {
       this.particles.push(this.spawn());
     }
@@ -26,10 +33,24 @@ class ParticleField {
 
   step() {
     for (const p of this.particles) {
+      p.vy += GRAVITY;
       p.x += p.vx;
       p.y += p.vy;
-      if (p.x < 0 || p.x > 1) p.vx *= -1;
-      if (p.y < 0 || p.y > 1) p.vy *= -1;
+      if (p.x < 0 || p.x > 1) {
+        p.vx *= -1;
+      } else if (p.y > 1) {
+        p.vy *= -0.8;
+      }
+    }
+  }
+
+  async loadPreset(path: string) {
+    try {
+      const raw = await readFile(path, "utf8");
+      const preset = await JSON.parse(raw);
+      this.particles = preset.particles;
+    } catch (err) {
+      console.error("preset failed", err);
     }
   }
 }
@@ -43,4 +64,6 @@ const animate = (field: ParticleField) => {
   field.step();
   requestAnimationFrame(() => animate(field));
 };
+
+export { ParticleField, createField, animate };
 `;

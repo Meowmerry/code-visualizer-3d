@@ -1,13 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { EditorPanel } from "@/components/EditorPanel";
-import { InfoPanel } from "@/components/InfoPanel";
-import { Legend } from "@/components/Legend";
+import { CodeEditor } from "@/ui/CodeEditor";
+import { AIPanel } from "@/ui/AIPanel";
+import { Legend } from "@/ui/Legend";
+import { useNodeExplain } from "@/ai/useNodeExplain";
 
 // The 3D canvas is strictly client-side; skip SSR to avoid a hydration mismatch.
-const Scene = dynamic(
-  () => import("@/components/Scene").then((m) => m.Scene),
+const SceneCanvas = dynamic(
+  () => import("@/scene/SceneCanvas").then((m) => m.SceneCanvas),
   {
     ssr: false,
     loading: () => (
@@ -19,6 +20,9 @@ const Scene = dynamic(
 );
 
 export default function Home() {
+  // Stream a Claude explanation whenever a node is selected.
+  useNodeExplain();
+
   return (
     <main className="flex h-screen w-screen flex-col">
       <header className="flex items-center gap-3 border-b border-white/5 bg-bg-panel px-5 py-3">
@@ -33,17 +37,15 @@ export default function Home() {
 
       <div className="flex min-h-0 flex-1">
         <aside className="w-[30%] min-w-[300px] max-w-[520px] border-r border-white/5">
-          <EditorPanel />
+          <CodeEditor />
         </aside>
 
-        <section className="relative min-w-0 flex-1">
-          <Scene />
+        <section className="relative min-w-0 flex-1 overflow-hidden">
+          <SceneCanvas />
           <Legend />
+          {/* AI inspector slides in from the right on node select. */}
+          <AIPanel />
         </section>
-
-        <aside className="w-[24%] min-w-[260px] max-w-[400px] border-l border-white/5">
-          <InfoPanel />
-        </aside>
       </div>
     </main>
   );

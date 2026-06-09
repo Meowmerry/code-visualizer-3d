@@ -1,11 +1,11 @@
 "use client";
 
 import Editor from "@monaco-editor/react";
-import { useStore } from "@/lib/store";
+import { useSceneStore } from "@/store/sceneStore";
 
-export function EditorPanel() {
-  const code = useStore((s) => s.code);
-  const setCode = useStore((s) => s.setCode);
+export function CodeEditor() {
+  const code = useSceneStore((s) => s.code);
+  const setCode = useSceneStore((s) => s.setCode);
 
   return (
     <div className="flex h-full flex-col bg-bg-panel">

@@ -38,7 +38,8 @@ export async function POST(req: NextRequest) {
   const client = new Anthropic({ apiKey });
 
   try {
-    const message = await client.messages.create({
+    // Stream the explanation token-by-token so the inspector fills in live.
+    const stream = client.messages.stream({
       model: "claude-sonnet-4-6",
       max_tokens: 512,
       system:
@@ -56,13 +57,31 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    const explanation = message.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("\n")
-      .trim();
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const event of stream) {
+            if (
+              event.type === "content_block_delta" &&
+              event.delta.type === "text_delta"
+            ) {
+              controller.enqueue(encoder.encode(event.delta.text));
+            }
+          }
+          controller.close();
+        } catch (err) {
+          controller.error(err);
+        }
+      },
+    });
 
-    return NextResponse.json({ explanation });
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
   } catch (err) {
     const detail = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(

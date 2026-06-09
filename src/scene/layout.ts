@@ -1,10 +1,10 @@
-import { CodeNode, flatten } from "./parse";
+import { ASTNode, flatten } from "@/parser/astParser";
+import { Shape, SHAPE_BY_KIND, colorOf } from "./sceneMap";
 
 export interface Placed {
-  node: CodeNode;
+  node: ASTNode;
   position: [number, number, number];
-  /** Box dimensions [w, h, d]. */
-  size: [number, number, number];
+  shape: Shape;
   color: string;
   parentId: string | null;
 }
@@ -15,34 +15,21 @@ export interface LayoutResult {
   edges: { from: [number, number, number]; to: [number, number, number] }[];
 }
 
-const SIBLING_GAP = 2.4;
-const LEVEL_GAP = 3.4;
+const SIBLING_GAP = 2.8;
+const LEVEL_GAP = 3.6;
 const DEPTH_FAN = 1.6;
 
-const COLORS: Record<CodeNode["kind"], string> = {
-  program: "#64748b",
-  class: "#f59e0b",
-  interface: "#a855f7",
-  function: "#22d3ee",
-  method: "#34d399",
-  variable: "#60a5fa",
-  block: "#94a3b8",
-};
-
-function boxHeight(lines: number): number {
-  return Math.min(4, Math.max(0.5, Math.sqrt(lines) * 0.45));
-}
-
 /**
- * Lay out a parsed tree as a 3D tidy tree growing along +Y. Returns absolute
- * positions for every node plus parent→child edge segments.
+ * Lay out a parsed tree as a 3D tidy tree growing along +Y. Geometry type and
+ * sizing are resolved per-node downstream (see NodeMesh); this stage only
+ * computes absolute positions and parent→child edge segments.
  */
-export function layout(root: CodeNode): LayoutResult {
+export function layout(root: ASTNode): LayoutResult {
   // First pass: assign an x-slot per node (classic tidy-tree packing).
   const xSlot = new Map<string, number>();
   let cursor = 0;
 
-  const assignX = (node: CodeNode): number => {
+  const assignX = (node: ASTNode): number => {
     if (node.children.length === 0) {
       const x = cursor;
       cursor += 1;
@@ -58,13 +45,13 @@ export function layout(root: CodeNode): LayoutResult {
 
   // Center the whole layout on x.
   const xs = [...xSlot.values()];
-  const xMid = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const xMid = xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0;
 
   const placed: Placed[] = [];
   const byId = new Map<string, Placed>();
   const edges: LayoutResult["edges"] = [];
 
-  const positionOf = (node: CodeNode): [number, number, number] => [
+  const positionOf = (node: ASTNode): [number, number, number] => [
     (xSlot.get(node.id)! - xMid) * SIBLING_GAP,
     node.depth * LEVEL_GAP,
     -node.depth * DEPTH_FAN,
@@ -72,13 +59,11 @@ export function layout(root: CodeNode): LayoutResult {
 
   for (const node of flatten(root)) {
     if (node.kind === "program") continue; // root is implicit, not drawn
-    const position = positionOf(node);
-    const h = boxHeight(node.lines);
     const p: Placed = {
       node,
-      position,
-      size: [1.7, h, 1.7],
-      color: COLORS[node.kind],
+      position: positionOf(node),
+      shape: SHAPE_BY_KIND[node.kind].shape,
+      color: colorOf(node),
       parentId: null,
     };
     placed.push(p);
@@ -86,14 +71,12 @@ export function layout(root: CodeNode): LayoutResult {
   }
 
   // Build edges and parent links (skip edges to the implicit root).
-  const linkChildren = (node: CodeNode) => {
+  const linkChildren = (node: ASTNode) => {
     for (const child of node.children) {
       const childPlaced = byId.get(child.id);
-      if (childPlaced) {
-        if (node.kind !== "program") {
-          childPlaced.parentId = node.id;
-          edges.push({ from: positionOf(node), to: positionOf(child) });
-        }
+      if (childPlaced && node.kind !== "program") {
+        childPlaced.parentId = node.id;
+        edges.push({ from: positionOf(node), to: positionOf(child) });
       }
       linkChildren(child);
     }
